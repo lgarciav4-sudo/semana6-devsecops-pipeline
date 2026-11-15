@@ -1,0 +1,3 @@
+Política: bloquear desde HIGH. Hallazgos: 1; bloqueantes: 1.
+  [HIGH] SAST / Semgrep: javascript.express.security.audit.express-unsafe
+BUILD BLOQUEADO: se superó el umbral de severidad.

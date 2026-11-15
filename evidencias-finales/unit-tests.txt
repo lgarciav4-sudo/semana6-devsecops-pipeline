@@ -1,0 +1,18 @@
+test_analysis_exception_is_technical_error (tests.test_security_gate.GateTests.test_analysis_exception_is_technical_error) ... ok
+test_critical_blocks_at_high (tests.test_security_gate.GateTests.test_critical_blocks_at_high) ... ok
+test_cvss_fallback (tests.test_security_gate.GateTests.test_cvss_fallback) ... ok
+test_exit_code_separates_vulnerability_from_technical_error (tests.test_security_gate.GateTests.test_exit_code_separates_vulnerability_from_technical_error) ... ok
+test_high_sca_blocks (tests.test_security_gate.GateTests.test_high_sca_blocks) ... ok
+test_high_semgrep_blocks (tests.test_security_gate.GateTests.test_high_semgrep_blocks) ... ok
+test_invalid_json_is_error (tests.test_security_gate.GateTests.test_invalid_json_is_error) ... ok
+test_low_finding_passes_high_gate (tests.test_security_gate.GateTests.test_low_finding_passes_high_gate) ... ok
+test_missing_dependency_array_is_error (tests.test_security_gate.GateTests.test_missing_dependency_array_is_error) ... ok
+test_missing_report_is_error (tests.test_security_gate.GateTests.test_missing_report_is_error) ... ok
+test_missing_semgrep_array_is_error (tests.test_security_gate.GateTests.test_missing_semgrep_array_is_error) ... ok
+test_semgrep_errors_are_not_ignored (tests.test_security_gate.GateTests.test_semgrep_errors_are_not_ignored) ... ok
+test_threshold_low_blocks_low (tests.test_security_gate.GateTests.test_threshold_low_blocks_low) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.197s
+
+OK

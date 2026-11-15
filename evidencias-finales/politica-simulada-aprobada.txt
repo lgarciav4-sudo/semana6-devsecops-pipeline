@@ -1,0 +1,3 @@
+Política: bloquear desde HIGH. Hallazgos: 1; bloqueantes: 0.
+  [LOW] SAST / Semgrep: ejemplo-informativo
+BUILD APROBADO: ningún hallazgo supera el umbral configurado.

@@ -1,0 +1,23 @@
+Repositorio: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline
+Rama: main
+Commit analizado: 04e4bc33e98279d4d8151eaab0c04d635c3f7332
+Ejecución verificada: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43670979336
+Inicio: 2026-11-15T03:08:21Z
+Fin: 2026-11-15T03:09:54Z
+Conclusión del workflow: failure
+Motivo: el job Política HIGH/CRITICAL terminó con código 1 (BUILD BLOQUEADO). No fue un fallo técnico de las herramientas.
+
+Jobs:
+- Pruebas de la política: success — 13 pruebas OK
+- SAST Semgrep: success — 209 reglas, 5 archivos, 3 hallazgos
+- SBOM Syft: success — CycloneDX 1.6, 53 componentes
+- SCA Dependency-Check: success — 10 dependencias, 8 con avisos, 22 vulnerabilidades
+- Política HIGH/CRITICAL: failure — 25 hallazgos, 11 bloqueantes, código 1
+
+Ejecuciones anteriores de diagnóstico:
+- https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43658501440
+  Docker, bloqueo H2 y "No documents exist", código 13
+- https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43668921377
+  La API de NVD rechazó el secreto NVD_API_KEY
+- https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43669591176
+  La URL del espejo perdió la llave {0} por la expansión de bash

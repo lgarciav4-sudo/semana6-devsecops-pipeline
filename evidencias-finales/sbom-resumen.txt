@@ -1,0 +1,4 @@
+bomFormat=CycloneDX
+specVersion=1.6
+componentes=53
+ejemplos=/home/runner/work/semana6-devsecops-pipeline/semana6-devsecops-pipeline/app/package-lock.json, accepts, array-flatten, body-parser, bytes, content-disposition, content-type, cookie, cookie-signature, debug, depd, destroy
