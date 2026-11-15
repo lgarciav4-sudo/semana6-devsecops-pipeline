@@ -1,0 +1,129 @@
+name: Semana 7 - Firma Cosign
+
+# Firma keyless: GitHub entrega un token OIDC y Fulcio emite un certificado
+# de corta duración. No hay una clave privada guardada en el repositorio.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/semana7-cosign.yml
+      - scripts/build_artifact.py
+      - scripts/resumir_firma.py
+      - app/**
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  firmar-y-verificar:
+    name: Firmar, verificar y comprobar integridad
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Cosign
+        uses: sigstore/cosign-installer@v4.1.3
+
+      - name: Construir artefacto y procedencia
+        env:
+          EXPECTED_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/semana7-cosign.yml@${{ github.ref }}
+        run: |
+          python scripts/build_artifact.py
+          python -m json.tool dist/provenance.json >/dev/null
+          echo "Identidad OIDC esperada: ${EXPECTED_IDENTITY}"
+
+      - name: Firmar artefacto y procedencia
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign version
+          cosign sign-blob --yes --bundle dist/artefacto.sigstore.json dist/semana7-app.zip
+          cosign sign-blob --yes --bundle dist/provenance.sigstore.json dist/provenance.json
+
+      - name: Verificar firma e identidad
+        env:
+          EXPECTED_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/semana7-cosign.yml@${{ github.ref }}
+        run: |
+          set -o pipefail
+          cosign verify-blob \
+            --bundle dist/artefacto.sigstore.json \
+            --certificate-identity "${EXPECTED_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-repository "${{ github.repository }}" \
+            --certificate-github-workflow-name "Semana 7 - Firma Cosign" \
+            --certificate-github-workflow-ref "${{ github.ref }}" \
+            --certificate-github-workflow-sha "${{ github.sha }}" \
+            dist/semana7-app.zip | tee dist/verificacion-original.txt
+          cosign verify-blob \
+            --bundle dist/provenance.sigstore.json \
+            --certificate-identity "${EXPECTED_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-repository "${{ github.repository }}" \
+            dist/provenance.json | tee dist/verificacion-procedencia.txt
+          python scripts/resumir_firma.py dist/artefacto.sigstore.json dist/identidad-firma.txt
+
+      - name: Rechazar una copia manipulada
+        env:
+          EXPECTED_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/semana7-cosign.yml@${{ github.ref }}
+        run: |
+          cp dist/semana7-app.zip dist/semana7-app-manipulado.zip
+          printf '\nmanipulado\n' >> dist/semana7-app-manipulado.zip
+          set +e
+          cosign verify-blob \
+            --bundle dist/artefacto.sigstore.json \
+            --certificate-identity "${EXPECTED_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            dist/semana7-app-manipulado.zip > dist/verificacion-manipulado.txt 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "ERROR: Cosign aceptó un archivo distinto al que fue firmado." >&2
+            exit 1
+          fi
+          {
+            echo "La copia modificada fue rechazada con código ${code}."
+            echo "La firma sigue asociada al ZIP original y no cubre estos bytes."
+          } | tee -a dist/verificacion-manipulado.txt
+          rm -f dist/semana7-app-manipulado.zip
+
+      - name: Publicar atestación de procedencia de GitHub
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/semana7-app.zip
+
+      - name: Verificar la atestación de GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gh attestation verify dist/semana7-app.zip \
+            --repo "${{ github.repository }}" | tee dist/atestacion-github.txt
+
+      - name: Publicar evidencias
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semana7-cosign-evidencias
+          path: |
+            dist/semana7-app.zip
+            dist/provenance.json
+            dist/artefacto.sigstore.json
+            dist/provenance.sigstore.json
+            dist/verificacion-original.txt
+            dist/verificacion-procedencia.txt
+            dist/verificacion-manipulado.txt
+            dist/identidad-firma.txt
+            dist/atestacion-github.txt
+          if-no-files-found: warn
+          retention-days: 15

@@ -8,7 +8,10 @@ on:
     paths-ignore:
       - 'evidencias/**'
       - 'evidencias-finales/**'
+      - 'evidencias-semana7/**'
       - 'SEMANA6_EVIDENCIAS_FINALES.zip'
+      - 'SEMANA7_EVIDENCIAS.zip'
+      - 'dist/**'
   pull_request:
   workflow_dispatch:
 

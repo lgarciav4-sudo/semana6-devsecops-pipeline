@@ -13,6 +13,8 @@ odc-data/
 .tools/
 .dependency-check-data/
 SEMANA6_EVIDENCIAS_FINALES.zip
+SEMANA7_EVIDENCIAS.zip
+dist/
 
 # El patrón sbom*.json no debe ocultar el inventario entregado
 !evidencias-finales/
