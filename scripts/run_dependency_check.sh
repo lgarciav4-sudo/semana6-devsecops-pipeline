@@ -15,8 +15,13 @@ SCAN_DIR="${ODC_SCAN_DIR:-$ROOT/app}"
 INSTALL_DIR="${ODC_INSTALL_DIR:-$ROOT/.tools/dependency-check}"
 SKIP_UPDATE="${ODC_SKIP_UPDATE:-false}"
 # Espejo oficial del proyecto Dependency-Check, generado desde la NVD.
-# No usa la clave de la API. Documentación: data/mirrornvd.html
-NVD_MIRROR="${ODC_NVD_MIRROR:-https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz}"
+# Comillas simples: la llave de {0} no puede vivir dentro de ${var:-...}.
+# Documentación: data/mirrornvd.html
+if [[ -n "${ODC_NVD_MIRROR:-}" ]]; then
+  NVD_MIRROR="$ODC_NVD_MIRROR"
+else
+  NVD_MIRROR='https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz'
+fi
 
 mkdir -p "$DATA_DIR" "$REPORT_DIR" "$(dirname "$INSTALL_DIR")"
 
