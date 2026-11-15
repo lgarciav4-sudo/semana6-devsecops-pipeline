@@ -190,7 +190,6 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Actualizar NVD si hace falta y analizar
         env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
           ODC_SKIP_UPDATE: ${{ steps.nvd-restore.outputs.cache-hit }}
         run: bash scripts/run_dependency_check.sh
       - name: Guardar base NVD

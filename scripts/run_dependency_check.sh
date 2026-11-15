@@ -3,6 +3,9 @@
 # La actualización NVD y el escaneo están separados: un fallo de red no borra
 # una base ya descargada, y el escaneo usa --noupdate.
 set -euo pipefail
+# La ejecución 43668921377 mostró que NVD rechaza el secreto configurado.
+# El espejo oficial no necesita esa clave; se retira del entorno para no reenviarla.
+unset NVD_API_KEY || true
 
 VERSION="13.0.0"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,6 +14,9 @@ REPORT_DIR="${ODC_REPORT_DIR:-$ROOT/reports}"
 SCAN_DIR="${ODC_SCAN_DIR:-$ROOT/app}"
 INSTALL_DIR="${ODC_INSTALL_DIR:-$ROOT/.tools/dependency-check}"
 SKIP_UPDATE="${ODC_SKIP_UPDATE:-false}"
+# Espejo oficial del proyecto Dependency-Check, generado desde la NVD.
+# No usa la clave de la API. Documentación: data/mirrornvd.html
+NVD_MIRROR="${ODC_NVD_MIRROR:-https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz}"
 
 mkdir -p "$DATA_DIR" "$REPORT_DIR" "$(dirname "$INSTALL_DIR")"
 
@@ -44,29 +50,21 @@ db_ready() {
   [[ -n "$match" ]]
 }
 
-require_api_key() {
-  if [[ -z "${NVD_API_KEY:-}" ]]; then
-    echo "ERROR: falta NVD_API_KEY. No se genera un reporte SCA ficticio." >&2
-    exit 2
-  fi
-}
-
 update_db() {
   local attempt
-  require_api_key
-  for attempt in 1 2 3; do
+  # El espejo evita enviar NVD_API_KEY. Una clave rechazada por NVD no debe
+  # repetirse en los logs ni bloquear el análisis.
+  for attempt in 1 2; do
     clean_locks
-    echo "Actualización NVD, intento ${attempt}/3. La clave no se imprime."
+    echo "Actualización NVD desde el espejo oficial, intento ${attempt}/2."
     if "$DC" \
         --updateonly \
         --data "$DATA_DIR" \
-        --nvdApiKey "$NVD_API_KEY" \
-        --nvdApiDelay 1000 \
-        --nvdMaxRetryCount 8 \
+        --nvdDatafeed "$NVD_MIRROR" \
         --nvdValidForHours 168; then
       return 0
     fi
-    echo "La actualización NVD falló en el intento ${attempt}." >&2
+    echo "La actualización del espejo NVD falló en el intento ${attempt}." >&2
     sleep $((attempt * 20))
   done
   return 1
@@ -94,12 +92,12 @@ clean_locks
 if db_ready && [[ "$SKIP_UPDATE" == "true" ]]; then
   echo "Caché NVD reutilizada. No se descarga la base de nuevo."
 elif db_ready; then
-  echo "Hay una base NVD previa. Se intenta una actualización incremental."
+  echo "Hay una base NVD previa. Se intenta actualizarla desde el espejo oficial."
   if ! update_db; then
     echo "AVISO: la actualización NVD falló. El análisis continúa con la base local y --noupdate." >&2
   fi
 else
-  echo "No hay base NVD en caché. La descarga inicial es obligatoria."
+  echo "No hay base NVD en caché. La descarga inicial usa el espejo oficial de Dependency-Check."
   if ! update_db; then
     echo "ERROR: no se pudo construir la base NVD. No se inventan vulnerabilidades ni reportes." >&2
     exit 13
