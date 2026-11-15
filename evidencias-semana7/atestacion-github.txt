@@ -1,0 +1,38 @@
+Verificación de la atestación SLSA del artefacto semana7-app.zip.
+
+El paso de GitHub Actions `gh attestation verify` terminó con código 0 en la ejecución 43676948923, pero no escribió texto al redirigir la salida. Esta comprobación se repitió sobre el mismo ZIP descargado de ese artefacto, contra la atestación publicada en el repositorio. El comando salió con código 0 y exigió:
+
+- repositorio: lgarciav4-sudo/semana6-devsecops-pipeline
+- workflow firmante: .github/workflows/semana7-cosign.yml
+- ref de origen: refs/heads/main
+- commit de origen: e550ea45c11851a0f41ce244877df8f842e5e8ac
+- tipo de predicado: https://slsa.dev/provenance/v1
+
+Resultado verificado:
+
+- sujeto: semana7-app.zip
+- sha256: 446d7a4ce73a357e7b219c24c08933b746358ed408162a3dcf4b19faf8f4ee58
+- buildType: https://actions.github.io/buildtypes/workflow/v1
+- workflow: .github/workflows/semana7-cosign.yml
+- repositorio del workflow: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline
+- ref: refs/heads/main
+- evento: push
+- runner: github-hosted
+- repository_id: 1458301352
+- repository_owner_id: 356792479
+- dependencia resuelta: git+https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline@refs/heads/main
+- gitCommit: e550ea45c11851a0f41ce244877df8f842e5e8ac
+- builder.id: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/.github/workflows/semana7-cosign.yml@refs/heads/main
+- invocationId: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43676948923/attempts/1
+- emisor del certificado: CN=sigstore-intermediate,O=sigstore.dev
+- identidad SAN: https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/.github/workflows/semana7-cosign.yml@refs/heads/main
+- emisor OIDC: https://token.actions.githubusercontent.com
+- nombre del workflow en el certificado: Semana 7 - Firma Cosign
+- visibilidad al firmar: public
+- marca de tiempo Rekor: 2026-11-15T04:29:06Z
+
+En el log de la misma ejecución, GitHub registró:
+
+- Attestation created for semana7-app.zip@sha256:446d7a4ce73a357e7b219c24c08933b746358ed408162a3dcf4b19faf8f4ee58
+- https://search.sigstore.dev?logIndex=3894007481
+- https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/attestations/67706946

@@ -1,0 +1,31 @@
+{
+  "tipo": "procedencia-declarada",
+  "artefacto": "semana7-app.zip",
+  "sha256": "446d7a4ce73a357e7b219c24c08933b746358ed408162a3dcf4b19faf8f4ee58",
+  "tamano_bytes": 3386,
+  "archivos": [
+    "Dockerfile",
+    "README.md",
+    "package.json",
+    "src/db.js",
+    "src/server.js"
+  ],
+  "repositorio": "lgarciav4-sudo/semana6-devsecops-pipeline",
+  "commit": "e550ea45c11851a0f41ce244877df8f842e5e8ac",
+  "ref": "refs/heads/main",
+  "workflow": "Semana 7 - Firma Cosign",
+  "archivo_workflow": ".github/workflows/semana7-cosign.yml",
+  "ejecucion": "43676948923",
+  "url_ejecucion": "https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/actions/runs/43676948923",
+  "actor": "lgarciav4-sudo",
+  "evento": "push",
+  "emisor_oidc_esperado": "https://token.actions.githubusercontent.com",
+  "identidad_esperada": "https://github.com/lgarciav4-sudo/semana6-devsecops-pipeline/.github/workflows/semana7-cosign.yml@refs/heads/main",
+  "sistema": "Linux",
+  "arquitectura": "X64",
+  "herramienta": "scripts/build_artifact.py",
+  "entradas": [
+    "app/"
+  ],
+  "fecha_utc": "2026-11-15T04:29:01Z"
+}
