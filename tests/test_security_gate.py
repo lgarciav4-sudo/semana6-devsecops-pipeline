@@ -38,5 +38,32 @@ class GateTests(unittest.TestCase):
         a={'results':[], 'errors':[]}
         b={'dependencies':[{'vulnerabilities':[{'severity':'CRITICAL','name':'CVE-TEST'}]}]}
         self.assertEqual(len(evaluate(a,b,'HIGH')[1]),1)
+    def test_invalid_json_is_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'roto.json'
+            path.write_text('{no es json', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                read_json(path)
+    def test_analysis_exception_is_technical_error(self):
+        report = {'dependencies': [], 'scanInfo': {'analysisExceptions': [{'message': 'fallo de analizador'}]}}
+        with self.assertRaises(ValueError):
+            evaluate({'results': [], 'errors': []}, report, 'HIGH')
+    def test_exit_code_separates_vulnerability_from_technical_error(self):
+        import subprocess
+        script = ROOT / 'scripts' / 'security_gate.py'
+        blocked = subprocess.run(
+            [sys.executable, str(script), '--semgrep', str(ROOT / 'ejemplos/semgrep-high.json'),
+             '--dependency-check', str(ROOT / 'ejemplos/dependency-check-clean.json'), '--fail-on', 'HIGH'],
+            capture_output=True, text=True)
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn('BUILD BLOQUEADO', blocked.stdout)
+        self.assertNotIn('BUILD APROBADO', blocked.stdout)
+        missing = subprocess.run(
+            [sys.executable, str(script), '--semgrep', str(ROOT / 'no-existe.json'),
+             '--dependency-check', str(ROOT / 'ejemplos/dependency-check-clean.json'), '--fail-on', 'HIGH'],
+            capture_output=True, text=True)
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn('ERROR:', missing.stderr)
+        self.assertNotIn('BUILD APROBADO', missing.stdout)
 
 if __name__ == '__main__': unittest.main()

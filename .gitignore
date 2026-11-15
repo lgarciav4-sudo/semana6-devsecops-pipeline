@@ -8,6 +8,15 @@ sbom*.json
 zap-report*
 report_*.html
 package-lock.json
+reports/
+odc-data/
+.tools/
+.dependency-check-data/
+SEMANA6_EVIDENCIAS_FINALES.zip
+
+# El patrón sbom*.json no debe ocultar el inventario entregado
+!evidencias-finales/
+!evidencias-finales/**
 
 # Env / secrets (never commit real ones)
 .env

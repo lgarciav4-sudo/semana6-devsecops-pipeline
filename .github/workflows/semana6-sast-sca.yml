@@ -1,15 +1,29 @@
 name: Semana 6 - SAST SCA SBOM Gate
+
+# SAST, SBOM y SCA corren en jobs distintos. El SBOM no espera a Dependency-Check.
+# La política HIGH/CRITICAL es un job posterior: un hallazgo bloquea el build,
+# y un reporte ausente o inválido falla como error técnico (código 2).
 on:
   push:
+    paths-ignore:
+      - 'evidencias/**'
+      - 'evidencias-finales/**'
+      - 'SEMANA6_EVIDENCIAS_FINALES.zip'
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: semana6-sast-sca-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  security:
+  unit-tests:
+    name: Pruebas de la política
     runs-on: ubuntu-latest
-    env:
-      FAIL_ON_SEVERITY: HIGH
+    timeout-minutes: 10
     steps:
       - name: Obtener código
         uses: actions/checkout@v4
@@ -17,49 +31,260 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Preparar reportes
-        run: mkdir -p reports
-      - name: SAST - Semgrep
+      - name: Ejecutar pruebas unitarias
         run: |
-          python -m pip install semgrep
-          semgrep scan --config p/default --json --output reports/semgrep.json app/
-      - name: SCA - OWASP Dependency-Check
+          mkdir -p reports
+          set -o pipefail
+          python -m unittest tests.test_security_gate -v 2>&1 | tee reports/unit-tests.txt
+      - name: Publicar resultado de las pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests
+          path: reports/unit-tests.txt
+          if-no-files-found: error
+          retention-days: 15
+
+  sast:
+    name: SAST Semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Análisis SAST
         env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          SEMGREP_SEND_METRICS: "off"
         run: |
-          if [ -z "$NVD_API_KEY" ]; then
-            echo 'Configure el secreto NVD_API_KEY en Settings > Secrets and variables > Actions.' >&2
-            exit 2
+          mkdir -p reports
+          python -m pip install --disable-pip-version-check "semgrep==1.185.0"
+          set +e
+          semgrep scan --config p/default --metrics=off --json --output reports/semgrep.json app/
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+            echo "ERROR técnico de Semgrep (código ${code}). No se aprueba el build." >&2
+            exit "$code"
           fi
-          mkdir -p reports .dependency-check-data
-          docker run --rm \
-            -v "$PWD/app:/src:ro" \
-            -v "$PWD/reports:/report" \
-            -v "$PWD/.dependency-check-data:/usr/share/dependency-check/data" \
-            owasp/dependency-check:latest \
-            --project 'Semana6-Secure-SDLC' \
-            --scan /src \
-            --out /report \
-            --format JSON \
-            --format HTML \
-            --nvdApiKey "$NVD_API_KEY" \
-            --failOnCVSS 11
-      - name: SBOM - Syft CycloneDX
-        uses: anchore/sbom-action@v0
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          data = json.loads(Path("reports/semgrep.json").read_text(encoding="utf-8"))
+          if not isinstance(data.get("results"), list):
+              raise SystemExit("ERROR: el reporte Semgrep no contiene results[]")
+          if data.get("errors"):
+              raise SystemExit("ERROR: Semgrep reportó errores de análisis")
+          counts = Counter((item.get("extra") or {}).get("severity", "SIN_SEVERIDAD") for item in data["results"])
+          scanned = (data.get("paths") or {}).get("scanned") or []
+          print(f"Archivos en el reporte: {len(scanned)}. Hallazgos: {len(data['results'])}.")
+          print("Severidades Semgrep (sin convertir a CVSS): " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+          PY
+          {
+            echo "## SAST Semgrep"
+            echo "El análisis terminó y el JSON quedó publicado como artifact."
+            echo "Los hallazgos no bloquean este job: la política de severidad decide después."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar reporte Semgrep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: reports/semgrep.json
+          if-no-files-found: error
+          retention-days: 15
+
+  sbom:
+    name: SBOM Syft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Preparar directorio de reportes
+        run: mkdir -p reports
+      - name: Generar SBOM CycloneDX
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: ./app
           format: cyclonedx-json
           output-file: reports/sbom.cyclonedx.json
-      - name: Puerta de calidad por severidad
+          upload-artifact: false
+      - name: Validar SBOM
         run: |
-          python scripts/security_gate.py \
-            --semgrep reports/semgrep.json \
-            --dependency-check reports/dependency-check-report.json \
-            --fail-on "$FAIL_ON_SEVERITY"
-      - name: Publicar evidencias, incluso si falla
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("reports/sbom.cyclonedx.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          if data.get("bomFormat") != "CycloneDX":
+              raise SystemExit(f"ERROR: bomFormat inesperado: {data.get('bomFormat')!r}")
+          components = data.get("components") or []
+          if not isinstance(components, list) or not components:
+              raise SystemExit("ERROR: el SBOM no contiene componentes")
+          summary = (
+              f"bomFormat={data.get('bomFormat')}\n"
+              f"specVersion={data.get('specVersion')}\n"
+              f"componentes={len(components)}\n"
+          )
+          Path("reports/sbom-resumen.txt").write_text(summary, encoding="utf-8")
+          print(summary)
+          PY
+          {
+            echo "## SBOM CycloneDX"
+            echo '```'
+            cat reports/sbom-resumen.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar SBOM
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reportes-sast-sca-sbom
-          path: reports/
+          name: sbom-cyclonedx
+          path: |
+            reports/sbom.cyclonedx.json
+            reports/sbom-resumen.txt
+          if-no-files-found: error
+          retention-days: 15
+
+  sca:
+    name: SCA Dependency-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Semana de la caché NVD
+        id: week
+        run: echo "value=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Restaurar base NVD
+        id: nvd-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: odc-data
+          key: odc-nvd-13.0.0-${{ runner.os }}-${{ steps.week.outputs.value }}
+          restore-keys: |
+            odc-nvd-13.0.0-${{ runner.os }}-
+      - name: Generar package-lock.json
+        working-directory: app
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Actualizar NVD si hace falta y analizar
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          ODC_SKIP_UPDATE: ${{ steps.nvd-restore.outputs.cache-hit }}
+        run: bash scripts/run_dependency_check.sh
+      - name: Guardar base NVD
+        if: always() && steps.nvd-restore.outputs.cache-hit != 'true' && hashFiles('odc-data/CACHE_OK') != ''
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: odc-data
+          key: odc-nvd-13.0.0-${{ runner.os }}-${{ steps.week.outputs.value }}
+      - name: Publicar reportes SCA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: |
+            reports/dependency-check-report.json
+            reports/dependency-check-report.html
           if-no-files-found: warn
+          retention-days: 15
+
+  gate:
+    name: Política HIGH/CRITICAL
+    needs: [sast, sca]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Descargar reporte SAST
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: semgrep-report
+          path: incoming/sast
+      - name: Descargar reporte SCA
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: dependency-check-report
+          path: incoming/sca
+      - name: Normalizar reportes
+        run: |
+          mkdir -p reports
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("reports")
+          incoming = Path("incoming")
+          wanted = ["semgrep.json", "dependency-check-report.json", "dependency-check-report.html"]
+          found = {path.name: path for path in incoming.rglob("*") if path.is_file()}
+          for name in wanted:
+              source = found.get(name)
+              if source is not None:
+                  (root / name).write_bytes(source.read_bytes())
+                  print(f"Reporte disponible: {name}")
+              else:
+                  print(f"Reporte ausente: {name}")
+          PY
+      - name: Demostrar política con reportes simulados
+        run: |
+          mkdir -p reports
+          set -o pipefail
+          python scripts/security_gate.py \
+            --semgrep ejemplos/semgrep-low.json \
+            --dependency-check ejemplos/dependency-check-clean.json \
+            --fail-on HIGH | tee reports/politica-simulada-aprobada.txt
+          set +e
+          python scripts/security_gate.py \
+            --semgrep ejemplos/semgrep-high.json \
+            --dependency-check ejemplos/dependency-check-clean.json \
+            --fail-on HIGH | tee reports/politica-simulada-bloqueada.txt
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "ERROR: el hallazgo HIGH simulado debía bloquear el build con código 1 y obtuvo ${code}." >&2
+            exit 2
+          fi
+          echo "Escenario simulado HIGH: bloqueo confirmado."
+      - name: Aplicar política a los reportes reales
+        run: |
+          set +e
+          set -o pipefail
+          python scripts/security_gate.py \
+            --semgrep reports/semgrep.json \
+            --dependency-check reports/dependency-check-report.json \
+            --fail-on HIGH 2>&1 | tee reports/politica-real.txt
+          code=${PIPESTATUS[0]}
+          echo "$code" > reports/politica-real.exit
+          {
+            echo "## Política de severidad"
+            echo '```'
+            cat reports/politica-real.txt
+            echo '```'
+            echo "Código de salida: ${code}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+      - name: Publicar resultado de la política
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: politica-severidad
+          path: reports/politica-*
+          if-no-files-found: warn
+          retention-days: 15
