@@ -63,13 +63,13 @@ jobs:
             --certificate-github-workflow-name "Semana 7 - Firma Cosign" \
             --certificate-github-workflow-ref "${{ github.ref }}" \
             --certificate-github-workflow-sha "${{ github.sha }}" \
-            dist/semana7-app.zip | tee dist/verificacion-original.txt
+            dist/semana7-app.zip 2>&1 | tee dist/verificacion-original.txt
           cosign verify-blob \
             --bundle dist/provenance.sigstore.json \
             --certificate-identity "${EXPECTED_IDENTITY}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             --certificate-github-workflow-repository "${{ github.repository }}" \
-            dist/provenance.json | tee dist/verificacion-procedencia.txt
+            dist/provenance.json 2>&1 | tee dist/verificacion-procedencia.txt
           python scripts/resumir_firma.py dist/artefacto.sigstore.json dist/identidad-firma.txt
 
       - name: Rechazar una copia manipulada
@@ -108,7 +108,7 @@ jobs:
         run: |
           set -o pipefail
           gh attestation verify dist/semana7-app.zip \
-            --repo "${{ github.repository }}" | tee dist/atestacion-github.txt
+            --repo "${{ github.repository }}" 2>&1 | tee dist/atestacion-github.txt
 
       - name: Publicar evidencias
         if: always()
