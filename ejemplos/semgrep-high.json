@@ -1,0 +1,1 @@
+{"results":[{"check_id":"javascript.express.security.audit.express-unsafe","extra":{"severity":"ERROR"},"path":"app/src/server.js"}],"errors":[]}

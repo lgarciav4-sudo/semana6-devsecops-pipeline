@@ -1,0 +1,65 @@
+name: Semana 6 - SAST SCA SBOM Gate
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    env:
+      FAIL_ON_SEVERITY: HIGH
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preparar reportes
+        run: mkdir -p reports
+      - name: SAST - Semgrep
+        run: |
+          python -m pip install semgrep
+          semgrep scan --config p/default --json --output reports/semgrep.json app/
+      - name: SCA - OWASP Dependency-Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -z "$NVD_API_KEY" ]; then
+            echo 'Configure el secreto NVD_API_KEY en Settings > Secrets and variables > Actions.' >&2
+            exit 2
+          fi
+          mkdir -p reports .dependency-check-data
+          docker run --rm \
+            -v "$PWD/app:/src:ro" \
+            -v "$PWD/reports:/report" \
+            -v "$PWD/.dependency-check-data:/usr/share/dependency-check/data" \
+            owasp/dependency-check:latest \
+            --project 'Semana6-Secure-SDLC' \
+            --scan /src \
+            --out /report \
+            --format JSON \
+            --format HTML \
+            --nvdApiKey "$NVD_API_KEY" \
+            --failOnCVSS 11
+      - name: SBOM - Syft CycloneDX
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./app
+          format: cyclonedx-json
+          output-file: reports/sbom.cyclonedx.json
+      - name: Puerta de calidad por severidad
+        run: |
+          python scripts/security_gate.py \
+            --semgrep reports/semgrep.json \
+            --dependency-check reports/dependency-check-report.json \
+            --fail-on "$FAIL_ON_SEVERITY"
+      - name: Publicar evidencias, incluso si falla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-sast-sca-sbom
+          path: reports/
+          if-no-files-found: warn
